@@ -1,23 +1,67 @@
 services:
   backend:
     build:
-      context: ./backend # Specifies the directory containing the Dockerfile
+      context: ./backend
     ports:
-      - "80:80" # Maps port 8000 on your host to port 80 in the container
+      - "8000:8000"
     volumes:
-      - ./backend:/app # Mounts your local code to the container for live reloads
+      - ./backend:/app
+      - uploads_data:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/medical_db
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-nomic-embed-text}
     depends_on:
-      - db # Ensures the database starts before the backend
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
 
   db:
-    image: "postgres:15-alpine" # Uses the official PostgreSQL image
+    image: pgvector/pgvector:pg16
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: fastapi_db
+      POSTGRES_DB: medical_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Persists the database data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Models are pulled automatically by the backend on first startup.
+    # To pre-pull manually: docker exec ollama ollama pull llama3.2
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
 volumes:
   postgres_data:
+  uploads_data:
+  ollama_data:
