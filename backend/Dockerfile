@@ -2,15 +2,26 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Compile bytecode at install time for faster startup
+ENV UV_COMPILE_BYTECODE=1
+# Use the project's virtual environment
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency manifests first (better layer caching)
+COPY pyproject.toml uv.lock .python-version ./
+
+# Install dependencies from the lockfile (no project code yet)
+RUN uv sync --frozen --no-install-project
 
 COPY . .
 
