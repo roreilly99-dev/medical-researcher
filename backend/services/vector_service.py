@@ -1,33 +1,47 @@
-import os
 import logging
 from typing import Optional
 
+from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from models import DocumentChunk
+from config import (
+    get_llm_provider,
+    OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL,
+    OPENAI_EMBED_MODEL, EMBEDDING_DIMENSIONS,
+)
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+
+def _get_embed_client() -> tuple[AsyncOpenAI, str]:
+    """Return (AsyncOpenAI-compatible client, model_name) for the active provider."""
+    provider = get_llm_provider()
+    if provider == "openai":
+        import os
+        return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")), OPENAI_EMBED_MODEL
+    return AsyncOpenAI(
+        base_url=f"{OLLAMA_BASE_URL}/v1",
+        api_key="ollama",
+    ), OLLAMA_EMBED_MODEL
 
 
 async def _embed_query(query: str) -> Optional[list[float]]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return None
-
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=api_key)
+    """Embed a single query string using the active provider."""
+    client, model = _get_embed_client()
+    provider = get_llm_provider()
 
     try:
-        response = await client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=[query],
-        )
+        kwargs: dict = {"model": model, "input": [query]}
+        if provider == "openai":
+            kwargs["dimensions"] = EMBEDDING_DIMENSIONS
+
+        response = await client.embeddings.create(**kwargs)
         return response.data[0].embedding
+
     except Exception as exc:
-        logger.error("Query embedding failed: %s", exc)
+        logger.error("Query embedding failed (%s / %s): %s", provider, model, exc)
         return None
 
 
@@ -85,3 +99,4 @@ async def similarity_search(
         chunks.append(c)
 
     return chunks
+
