@@ -50,3 +50,4 @@ yarn-error.log*
 
 # Docker
 docker-compose.override.yml
+frontend/package-lock.json

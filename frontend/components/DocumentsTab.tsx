@@ -122,7 +122,12 @@ export default function DocumentsTab() {
               {documents.map((doc) => (
                 <tr
                   key={doc.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  onClick={() => doc.status === 'completed' && setSelectedDoc(doc)}
+                  className={`transition-colors ${
+                    doc.status === 'completed'
+                      ? 'hover:bg-blue-50 cursor-pointer'
+                      : 'hover:bg-gray-50'
+                  }`}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -149,16 +154,10 @@ export default function DocumentsTab() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       {doc.status === 'completed' && (
-                        <button
-                          onClick={() => setSelectedDoc(doc)}
-                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View
-                        </button>
+                        <Eye className="w-4 h-4 text-blue-300" aria-hidden />
                       )}
                       <button
-                        onClick={() => handleDelete(doc.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
                         className="text-gray-400 hover:text-red-500 transition-colors"
                         aria-label="Delete"
                       >
