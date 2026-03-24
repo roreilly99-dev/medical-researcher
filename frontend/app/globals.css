@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .tab-btn {
+    @apply px-6 py-3 text-sm font-medium rounded-t-lg transition-colors duration-150 focus:outline-none;
+  }
+  .tab-btn-active {
+    @apply bg-white text-blue-700 border-t border-l border-r border-gray-200 shadow-sm;
+  }
+  .tab-btn-inactive {
+    @apply text-gray-500 hover:text-blue-600;
+  }
+  .status-badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .btn-primary {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium;
+  }
+  .btn-danger {
+    @apply px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100;
+  }
+}
