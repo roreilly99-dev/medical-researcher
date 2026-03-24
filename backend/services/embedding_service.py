@@ -5,11 +5,13 @@ from typing import Optional
 import tiktoken
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
+import google.generativeai as genai
 
 from config import (
     get_llm_provider,
     OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL,
     OPENAI_EMBED_MODEL, EMBEDDING_DIMENSIONS,
+    GOOGLE_EMBED_MODEL,
 )
 from exceptions import EmbeddingError
 
@@ -33,8 +35,8 @@ class EmbeddingService:
         except Exception:
             return tiktoken.get_encoding("cl100k_base")
 
-    def _get_client(self) -> tuple[AsyncOpenAI, str]:
-        """Return (AsyncOpenAI-compatible client, model_name) for the active provider."""
+    def _get_openai_client(self) -> tuple[AsyncOpenAI, str]:
+        """Return (AsyncOpenAI-compatible client, model_name) for OpenAI/Ollama."""
         provider = get_llm_provider()
         if provider == "openai":
             return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")), OPENAI_EMBED_MODEL
@@ -76,20 +78,34 @@ class EmbeddingService:
         Raises:
             EmbeddingError: if the embedding API call fails.
         """
-        client, model = self._get_client()
         provider = get_llm_provider()
 
         try:
-            kwargs: dict = {"model": model, "input": texts}
-            # OpenAI text-embedding-3-* supports truncating output dimensions
-            if provider == "openai":
-                kwargs["dimensions"] = EMBEDDING_DIMENSIONS
+            if provider == "google":
+                # Use Google embeddings
+                genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+                embeddings = []
+                for text in texts:
+                    result = genai.embed_content(
+                        model=f"models/{GOOGLE_EMBED_MODEL}",
+                        content=text,
+                        task_type="retrieval_document",
+                    )
+                    embeddings.append(result["embedding"])
+                return embeddings
+            else:
+                # Use OpenAI or Ollama
+                client, model = self._get_openai_client()
+                kwargs: dict = {"model": model, "input": texts}
+                # OpenAI text-embedding-3-* supports truncating output dimensions
+                if provider == "openai":
+                    kwargs["dimensions"] = EMBEDDING_DIMENSIONS
 
-            response = await client.embeddings.create(**kwargs)
-            return [item.embedding for item in response.data]
+                response = await client.embeddings.create(**kwargs)
+                return [item.embedding for item in response.data]
 
         except Exception as exc:
-            logger.error("Embedding failed (%s / %s): %s", provider, model, exc)
+            logger.error("Embedding failed (%s): %s", provider, exc)
             raise EmbeddingError(f"Embedding API call failed: {exc}") from exc
 
     async def chunk_and_embed_document(

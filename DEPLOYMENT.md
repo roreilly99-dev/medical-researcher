@@ -9,9 +9,9 @@ This guide covers deploying your Medical Researcher app to free/open-source plat
 | Frontend | Next.js 15 (Node.js 20+) |
 | Backend | Python 3.12, FastAPI |
 | Database | PostgreSQL 16 with **pgvector** extension |
-| LLM | OpenAI API key OR self-hosted Ollama |
+| LLM | Google AI Studio (free), OpenAI API, or self-hosted Ollama |
 
-> **Note**: Free tiers typically don't support Ollama (requires GPU). Use OpenAI API for cloud deployments.
+> **Recommended**: Use **Google AI Studio** (free tier) for cloud deployments - no credit card required!
 
 ---
 
@@ -47,8 +47,8 @@ Railway offers the simplest full-stack deployment with PostgreSQL + pgvector sup
 
 5. **Set Environment Variables** in Railway dashboard:
    - `DATABASE_URL`: Auto-populated from PostgreSQL service
-   - `OPENAI_API_KEY`: Your OpenAI key
-   - `LLM_PROVIDER`: `openai`
+   - `GOOGLE_API_KEY`: Your Google AI Studio key (get free at https://aistudio.google.com/apikey)
+   - `LLM_PROVIDER`: `google`
    - `NEXT_PUBLIC_API_URL`: Your backend Railway URL
 
 ### Cost
@@ -183,16 +183,24 @@ CREATE EXTENSION IF NOT EXISTS vector;
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql+asyncpg://user:pass@host:5432/db` |
-| `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
-| `LLM_PROVIDER` | `openai` or `ollama` | `openai` |
-| `OPENAI_MODEL` | Chat model | `gpt-4o-mini` |
-| `OPENAI_EMBED_MODEL` | Embedding model | `text-embedding-3-small` |
+| `LLM_PROVIDER` | `google`, `openai`, or `ollama` | `google` |
+| `GOOGLE_API_KEY` | Google AI Studio API key (free) | `AIza...` |
+| `GOOGLE_MODEL` | Gemini model | `gemini-1.5-flash` |
+| `GOOGLE_EMBED_MODEL` | Google embedding model | `text-embedding-004` |
+| `OPENAI_API_KEY` | OpenAI API key (if using OpenAI) | `sk-...` |
+| `OPENAI_MODEL` | OpenAI chat model | `gpt-4o-mini` |
+| `OPENAI_EMBED_MODEL` | OpenAI embedding model | `text-embedding-3-small` |
 | `CORS_ORIGINS` | Comma-separated allowed origins | `https://myapp.vercel.app,https://myapp.com` |
 
 ### Frontend
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `NEXT_PUBLIC_API_URL` | Backend API URL | `https://api.example.com` |
+
+### Getting a Free Google AI Studio API Key
+1. Go to https://aistudio.google.com/apikey
+2. Click "Create API key"
+3. Copy the key and set as `GOOGLE_API_KEY`
 
 ---
 

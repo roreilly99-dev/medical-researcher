@@ -2,14 +2,16 @@ import os
 import re
 import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from openai import AsyncOpenAI
+import google.generativeai as genai
 
 from config import (
     get_llm_provider,
     OLLAMA_BASE_URL, OLLAMA_LLM_MODEL,
     OPENAI_LLM_MODEL,
+    GOOGLE_LLM_MODEL,
 )
 from exceptions import LLMError
 
@@ -51,8 +53,8 @@ class LLMService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _get_client(self) -> tuple[AsyncOpenAI, str]:
-        """Return (AsyncOpenAI-compatible client, model_name) for the active provider."""
+    def _get_openai_client(self) -> tuple[AsyncOpenAI, str]:
+        """Return (AsyncOpenAI-compatible client, model_name) for OpenAI/Ollama."""
         provider = get_llm_provider()
         if provider == "openai":
             return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")), OPENAI_LLM_MODEL
@@ -61,6 +63,11 @@ class LLMService:
             base_url=f"{OLLAMA_BASE_URL}/v1",
             api_key="ollama",  # Ollama ignores the key; the library requires a non-empty value
         ), OLLAMA_LLM_MODEL
+
+    def _get_google_model(self) -> genai.GenerativeModel:
+        """Return configured Google Generative AI model."""
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        return genai.GenerativeModel(GOOGLE_LLM_MODEL)
 
     @staticmethod
     def _parse_json_response(raw: str) -> dict:
@@ -108,28 +115,42 @@ class LLMService:
         Falls back to a mock extraction if the LLM call fails so that the
         processing pipeline can continue.
         """
-        client, model = self._get_client()
         provider = get_llm_provider()
         text_snippet = markdown[:12000]
         prompt = EXTRACTION_PROMPT.format(text=text_snippet)
 
         try:
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-            }
-            # OpenAI and recent Ollama (llama3.2+) both support json_object mode
-            if provider == "openai":
-                kwargs["response_format"] = {"type": "json_object"}
+            if provider == "google":
+                # Use Google Gemini
+                model = self._get_google_model()
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.1,
+                        response_mime_type="application/json",
+                    ),
+                )
+                raw = response.text or "{}"
+            else:
+                # Use OpenAI or Ollama
+                client, model = self._get_openai_client()
+                kwargs: dict[str, Any] = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1,
+                }
+                # OpenAI and recent Ollama (llama3.2+) both support json_object mode
+                if provider == "openai":
+                    kwargs["response_format"] = {"type": "json_object"}
 
-            response = await client.chat.completions.create(**kwargs)
-            raw = response.choices[0].message.content or "{}"
+                response = await client.chat.completions.create(**kwargs)
+                raw = response.choices[0].message.content or "{}"
+
             data = self._parse_json_response(raw)
             return {field: data.get(field) for field in EXTRACTION_FIELDS}
 
         except Exception as exc:
-            logger.error("LLM extraction failed (%s / %s): %s", provider, model, exc)
+            logger.error("LLM extraction failed (%s): %s", provider, exc)
             return self._mock_extraction(markdown)
 
     async def generate_chat_response(
@@ -143,7 +164,6 @@ class LLMService:
         Raises:
             LLMError: if the LLM call fails.
         """
-        client, model = self._get_client()
         provider = get_llm_provider()
 
         system_prompt = (
@@ -154,20 +174,43 @@ class LLMService:
             f"Relevant context from research papers:\n\n{context}"
         )
 
-        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-        for msg in conversation_history[-10:]:
-            messages.append({"role": msg.role, "content": msg.content})
-        messages.append({"role": "user", "content": message})
-
         try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.3,
-            )
-            return response.choices[0].message.content or "No response generated."
+            if provider == "google":
+                # Use Google Gemini
+                model = self._get_google_model()
+                
+                # Build conversation for Gemini
+                chat_history = []
+                for msg in conversation_history[-10:]:
+                    role = "user" if msg.role == "user" else "model"
+                    chat_history.append({"role": role, "parts": [msg.content]})
+                
+                # Start chat with system instruction
+                chat = model.start_chat(history=chat_history)
+                full_prompt = f"{system_prompt}\n\nUser question: {message}"
+                
+                response = await chat.send_message_async(
+                    full_prompt,
+                    generation_config=genai.GenerationConfig(temperature=0.3),
+                )
+                return response.text or "No response generated."
+            else:
+                # Use OpenAI or Ollama
+                client, model_name = self._get_openai_client()
+
+                messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+                for msg in conversation_history[-10:]:
+                    messages.append({"role": msg.role, "content": msg.content})
+                messages.append({"role": "user", "content": message})
+
+                response = await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.3,
+                )
+                return response.choices[0].message.content or "No response generated."
 
         except Exception as exc:
-            logger.error("Chat generation failed (%s / %s): %s", provider, model, exc)
+            logger.error("Chat generation failed (%s): %s", provider, exc)
             raise LLMError(f"Chat generation failed: {exc}") from exc
 

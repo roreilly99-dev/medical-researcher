@@ -14,10 +14,10 @@ services:
         fromDatabase:
           name: medical-db
           property: connectionString
-      - key: OPENAI_API_KEY
+      - key: GOOGLE_API_KEY
         sync: false  # Set manually in dashboard
       - key: LLM_PROVIDER
-        value: openai
+        value: google
       - key: CORS_ORIGINS
         fromService:
           name: medical-researcher-frontend

@@ -13,6 +13,7 @@ from config import (
     get_llm_provider,
     OLLAMA_BASE_URL, OLLAMA_LLM_MODEL, OLLAMA_EMBED_MODEL,
     OPENAI_LLM_MODEL, OPENAI_EMBED_MODEL, EMBEDDING_DIMENSIONS,
+    GOOGLE_LLM_MODEL, GOOGLE_EMBED_MODEL,
 )
 
 load_dotenv()
@@ -108,6 +109,13 @@ async def health_check():
 async def provider_info():
     """Return the active LLM / embedding provider configuration."""
     provider = get_llm_provider()
+    if provider == "google":
+        return {
+            "provider": "google",
+            "llm_model": GOOGLE_LLM_MODEL,
+            "embed_model": GOOGLE_EMBED_MODEL,
+            "embed_dimensions": EMBEDDING_DIMENSIONS,
+        }
     if provider == "openai":
         return {
             "provider": "openai",
