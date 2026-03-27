@@ -27,6 +27,7 @@ venv/
 env/
 
 # Environment files
+backend/.env
 .env
 .env.local
 .env.development.local
