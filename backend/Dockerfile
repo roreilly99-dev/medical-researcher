@@ -15,15 +15,14 @@ ENV UV_NO_PROGRESS=1
 # Copy dependency files first (better cache)
 COPY pyproject.toml uv.lock .python-version ./
 
-# Install dependencies
-RUN uv venv /app/.venv && \
-    uv sync --frozen --no-install-project --no-cache
-
-# Copy application code
+# Copy application code so uv sync can resolve dependencies
 COPY . .
+
+# Install dependencies using uv sync (respects uv.lock)
+RUN uv sync --frozen --no-cache
 
 RUN mkdir -p /app/uploads
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
