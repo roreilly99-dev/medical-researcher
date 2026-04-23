@@ -16,6 +16,15 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === 'documents') {
+      // Trigger refresh when switching to documents tab
+      setRefreshTrigger(prev => prev + 1);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -40,7 +49,7 @@ export default function Home() {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`tab-btn ${activeTab === tab.id ? 'tab-btn-active' : 'tab-btn-inactive'}`}
             >
               {tab.label}
@@ -50,8 +59,8 @@ export default function Home() {
 
         {/* Tab content */}
         <div className="py-6">
-          {activeTab === 'upload' && <UploadTab onUploaded={() => setActiveTab('documents')} />}
-          {activeTab === 'documents' && <DocumentsTab />}
+          {activeTab === 'upload' && <UploadTab onUploaded={() => handleTabChange('documents')} />}
+          {activeTab === 'documents' && <DocumentsTab refreshTrigger={refreshTrigger} />}
           {activeTab === 'chat' && <ChatTab />}
         </div>
       </div>

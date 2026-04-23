@@ -1,58 +1,44 @@
-import os
 import logging
 from typing import Optional
 
-from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from models import DocumentChunk
-from config import (
-    get_llm_provider,
-    OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL,
-    OPENAI_EMBED_MODEL, EMBEDDING_DIMENSIONS,
-)
 from exceptions import VectorSearchError
 
 logger = logging.getLogger(__name__)
 
 
 class VectorService:
-    """Performs cosine-similarity search against stored document chunk embeddings."""
+    """Performs cosine-similarity search against stored document chunk embeddings using PostgreSQL vector DB."""
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
+    def __init__(self):
+        self._embedder = None
 
-    def _get_client(self) -> tuple[AsyncOpenAI, str]:
-        """Return (AsyncOpenAI-compatible client, model_name) for the active provider."""
-        provider = get_llm_provider()
-        if provider == "openai":
-            return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")), OPENAI_EMBED_MODEL
-        return AsyncOpenAI(
-            base_url=f"{OLLAMA_BASE_URL}/v1",
-            api_key="ollama",
-        ), OLLAMA_EMBED_MODEL
+    async def _get_embedder(self):
+        """Lazy load the sentence-transformers model."""
+        if self._embedder is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                # Use the same model as in embedding service
+                self._embedder = SentenceTransformer('all-MiniLM-L6-v2')
+            except ImportError:
+                raise VectorSearchError("sentence-transformers not installed")
+        return self._embedder
 
     async def _embed_query(self, query: str) -> Optional[list[float]]:
-        """Embed a single query string using the active provider.
+        """Embed a single query string using sentence-transformers.
 
         Returns ``None`` if the embedding call fails so that callers can fall
         back to an unordered chunk scan.
         """
-        client, model = self._get_client()
-        provider = get_llm_provider()
-
         try:
-            kwargs: dict = {"model": model, "input": [query]}
-            if provider == "openai":
-                kwargs["dimensions"] = EMBEDDING_DIMENSIONS
-
-            response = await client.embeddings.create(**kwargs)
-            return response.data[0].embedding
-
+            embedder = await self._get_embedder()
+            embedding = embedder.encode([query], convert_to_numpy=False)[0]
+            return embedding.tolist()
         except Exception as exc:
-            logger.error("Query embedding failed (%s / %s): %s", provider, model, exc)
+            logger.error("Query embedding failed: %s", exc)
             return None
 
     @staticmethod
@@ -72,7 +58,7 @@ class VectorService:
     async def similarity_search(
         self, db: AsyncSession, query: str, limit: int = 5
     ) -> list[DocumentChunk]:
-        """Find the most relevant document chunks for *query* using cosine similarity.
+        """Find the most relevant document chunks for *query* using cosine similarity in PostgreSQL vector DB.
 
         Falls back to an arbitrary unordered scan when no embedding is available.
 
@@ -109,6 +95,8 @@ class VectorService:
             return [self._row_to_chunk(row) for row in result.fetchall()]
 
         except Exception as exc:
+            logger.error("Vector similarity search failed: %s", exc)
+            raise VectorSearchError(f"Similarity search failed: {exc}") from exc
             logger.error("Vector similarity search failed: %s", exc)
             raise VectorSearchError(f"Similarity search failed: {exc}") from exc
 

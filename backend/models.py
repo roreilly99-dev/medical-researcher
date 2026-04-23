@@ -43,10 +43,6 @@ class DocumentChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    # 768 dims: compatible with Ollama nomic-embed-text (native) and
-    # OpenAI text-embedding-3-small (truncated via dimensions= parameter).
-    # NOTE: if upgrading from the initial 1536-dim schema, drop and recreate
-    # the document_chunks table and re-process all documents.
-    embedding: Mapped[list | None] = mapped_column(Vector(768), nullable=True)
+    embedding: Mapped[list | None] = mapped_column(Vector(384), nullable=True)
 
     document: Mapped["Document"] = relationship("Document", back_populates="chunks")

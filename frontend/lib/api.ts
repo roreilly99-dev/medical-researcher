@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Document, ChatMessage, ChatResponse } from './types';
+import type { Document, ChatMessage, ChatResponse, ProcessingUpdate } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -41,4 +41,36 @@ export async function sendChatMessage(
     conversation_history: history,
   });
   return response.data;
+}
+
+export function connectToDocumentProcessing(
+  documentId: string,
+  onUpdate: (update: ProcessingUpdate) => void,
+  onError?: (error: Event) => void
+): () => void {
+  const wsUrl = `${BASE_URL.replace('http', 'ws')}/api/v1/ws/document/${documentId}`;
+  const ws = new WebSocket(wsUrl);
+
+  ws.onmessage = (event) => {
+    try {
+      const data: ProcessingUpdate = JSON.parse(event.data);
+      onUpdate(data);
+    } catch (error) {
+      console.error('Failed to parse WebSocket message:', error);
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+    onError?.(error);
+  };
+
+  ws.onclose = () => {
+    console.log('WebSocket connection closed');
+  };
+
+  // Return cleanup function
+  return () => {
+    ws.close();
+  };
 }

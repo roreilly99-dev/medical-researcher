@@ -12,6 +12,7 @@ from exceptions import DocumentNotFoundError, InvalidFileTypeError, ProcessingEr
 from services.docling_service import DoclingService
 from services.llm_service import LLMService
 from services.embedding_service import EmbeddingService
+from api.websocket import send_processing_update
 
 logger = logging.getLogger(__name__)
 
@@ -126,19 +127,34 @@ class DocumentService:
                 doc.status = "processing"
                 await db.commit()
 
+                # Stage 1: Docling processing
+                await send_processing_update(document_id, "docling_started")
                 markdown, images = await self._docling.convert(file_path)
                 doc.markdown_content = markdown
                 doc.images = images
                 await db.commit()
+                await send_processing_update(document_id, "docling_completed", {
+                    "markdown_length": len(markdown),
+                    "images_count": len(images)
+                })
 
+                # Stage 2: LLM extraction
+                await send_processing_update(document_id, "llm_extraction_started")
                 extracted = await self._llm.extract_medical_fields(markdown)
                 doc.extracted_data = extracted
                 await db.commit()
+                await send_processing_update(document_id, "llm_extraction_completed", {
+                    "extracted_fields": extracted
+                })
 
+                # Stage 3: Embedding
+                await send_processing_update(document_id, "embedding_started")
                 await self._embedding.chunk_and_embed_document(db, document_id, markdown)
+                await send_processing_update(document_id, "embedding_completed")
 
                 doc.status = "completed"
                 await db.commit()
+                await send_processing_update(document_id, "processing_completed")
 
             except Exception as exc:
                 logger.error(
@@ -147,6 +163,9 @@ class DocumentService:
                 doc.status = "failed"
                 doc.error_message = str(exc)
                 await db.commit()
+                await send_processing_update(document_id, "processing_failed", {
+                    "error": str(exc)
+                })
 
     def schedule_processing(
         self,

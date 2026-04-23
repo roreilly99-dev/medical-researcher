@@ -27,7 +27,11 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function DocumentsTab() {
+interface Props {
+  refreshTrigger?: number;
+}
+
+export default function DocumentsTab({ refreshTrigger }: Props) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,7 +51,7 @@ export default function DocumentsTab() {
 
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+  }, [fetchDocuments, refreshTrigger]);
 
   // Poll while any document is pending or processing
   useEffect(() => {

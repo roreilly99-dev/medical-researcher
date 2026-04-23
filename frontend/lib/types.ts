@@ -1,5 +1,22 @@
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+export type ProcessingStage = 
+  | 'docling_started'
+  | 'docling_completed'
+  | 'llm_extraction_started'
+  | 'llm_extraction_completed'
+  | 'embedding_started'
+  | 'embedding_completed'
+  | 'processing_completed'
+  | 'processing_failed';
+
+export interface ProcessingUpdate {
+  type: 'processing_update';
+  document_id: string;
+  stage: ProcessingStage;
+  data?: any;
+}
+
 export interface ExtractedData {
   title?: string | null;
   authors?: string[] | null;
