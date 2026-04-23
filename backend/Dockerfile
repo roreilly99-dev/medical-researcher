@@ -12,6 +12,16 @@ ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 ENV UV_NO_PROGRESS=1
 
+# Install system libraries needed by rapidocr / OpenCV and other ML dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxrender1 \
+    libxext6 \
+    libx11-6 \
+    libxcb1 \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy dependency files first (better cache)
 COPY pyproject.toml uv.lock .python-version ./
 
